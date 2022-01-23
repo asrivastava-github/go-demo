@@ -23,6 +23,7 @@
 
 ### Build the provider
     ./build.sh
+    There has been difference in widnows, linux and MacOs plugin path which is very important to remember.
 
 ### Initialise the terraform
     terraform.exe init -plugin-dir=/c/Users/avinash.c.srivastava/.terraform.d/plugins/
