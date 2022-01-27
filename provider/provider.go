@@ -69,8 +69,10 @@ type User struct {
 }
 
 func dataUserById(ctx context.Context, rd *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	host := rd.Get("host").(string)
-	port := rd.Get("port").(string)
+	// host := rd.Get("host").(string)
+	// port := rd.Get("port").(string)
+	host := "localhost"
+	port := "5000"
 	userId := rd.Get("id")
 	var userIdURL = fmt.Sprintf("http://%s:%s/users/%s", host, port, userId)
 	
@@ -100,20 +102,21 @@ func dataUserById(ctx context.Context, rd *schema.ResourceData, meta interface{}
 		Summary:	fmt.Sprintf("%+v", rd),
 	})
 
-	// receivedUsers := map[string]string{
-	// 	"firstname": rd.FirstName,
-	// 	"lastname": rd.LastName,
-	// }
+	receivedUsers := map[string]string{
+		"firstname": 	user.FirstName,
+		"lastname": 	user.LastName,
+	}
 
-	// for key, val := range receivedUsers {
-	// 	if err := d.Set(key, val); err != nil {
-	// 		return diag.FromErr(err)
-	// 	}
-	// }
+	for key, val := range receivedUsers {
+		if err := rd.Set(key, val); err != nil {
+			return diag.FromErr(err)
+		}
+	}
 	
 	rd.SetId(user.ID)
 
-	return ds
+	// return ds
+	return nil
 }
 
 func dataSourceService() *schema.Resource {
