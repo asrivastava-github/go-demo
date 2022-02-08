@@ -1,11 +1,13 @@
 package provider
 
 import (
+	"bytes"
 	"context"
-	"fmt"
-	"net/http"
-	"io/ioutil"
 	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"net/http"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -28,65 +30,82 @@ func Provider() *schema.Provider {
 		},
 		// Data source name has to starts with the provider
 		DataSourcesMap: map[string]*schema.Resource {
-			"demo_users": dataSourceService(),
+			"demo_user_by_id": dataSourceUserbyID(),
+			"demo_users": dataSourceUsers(),
 		},
-		// ResourceMap : map[string]*schema.Resource{},
+		ResourcesMap : map[string]*schema.Resource{
+			"demo_user_service": resourceService(),
+		},
+		// This triggers to initialise the configuration. Connection etc.
 		ConfigureContextFunc: setupServiceContext,
 	}
+}
+
+type User struct {
+	ID        int
+	FirstName string
+	LastName  string
+}
+
+const HostURL string = "http://localhost:5000"
+
+func catchErr(err error) {
+	fmt.Println(err)
+}
+
+type Client struct {
+	HostURL    string
+	HTTPClient *http.Client
+}
+
+func NewClient(host, port *string) (*Client, error) {
+	c := Client{
+		HTTPClient: &http.Client{Timeout: 10 * time.Second},
+		// Default Hashicups URL
+		HostURL: fmt.Sprintf("http://%s:%s/users", *host, *port),
+	}
+
+	return &c, nil
+}
+
+func (c *Client) doRequest(req *http.Request) ([]byte, error) {
+	
+	res, err := c.HTTPClient.Do(req)
+	catchErr(err)
+	defer res.Body.Close()
+
+	body, err := ioutil.ReadAll(res.Body)
+	catchErr(err)
+
+	if res.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("status: %d, body: %s", res.StatusCode, body)
+	}
+
+	return body, err
 }
 
 func setupServiceContext(ctx context.Context, rd *schema.ResourceData) (interface{}, diag.Diagnostics) {
 	host := rd.Get("host").(string)
 	port := rd.Get("port").(string)
 
-	var d diag.Diagnostics
-	var hostPort = fmt.Sprintf("%s:%s", host, port)
-	fmt.Println(hostPort)
+	client, err := NewClient(&host, &port)
+	catchErr(err)
 
-	client := http.Client{}
+	var d diag.Diagnostics
 	return client, d
 }
 
-
-func dataAllUsers() string {
-	var usersURL = fmt.Sprintf("%s", "http://localhost:3000/users")
-	resp, err := http.Get(usersURL)
-	if err != nil {
-		fmt.Println("Unable to get response")
-	}
-
-	body, readErr := ioutil.ReadAll(resp.Body)
-	if readErr != nil {
-		fmt.Println(readErr)
-	}
-	return string(body)
-}
-
-type User struct {
-	ID        string
-	FirstName string
-	LastName  string
-}
-
 func dataUserById(ctx context.Context, rd *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	// host := rd.Get("host").(string)
-	// port := rd.Get("port").(string)
-	host := "localhost"
-	port := "5000"
-	userId := rd.Get("id")
-	var userIdURL = fmt.Sprintf("http://%s:%s/users/%s", host, port, userId)
+	// userId := rd.Get("id")
+	userId := rd.Id()
+	fmt.Println(userId)
+	client := meta.(*Client)
 	
 	// Get response of the request
-	resp, err := http.Get(userIdURL)
-	if err != nil {
-		fmt.Println(err)
-	}
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/%s", client.HostURL, userId), nil)
+	body, err := client.doRequest(req)
+	catchErr(err)
 
-	// Get response body of the request
-	body, readErr := ioutil.ReadAll(resp.Body)
-	if readErr != nil {
-		fmt.Println(readErr)
-	}
 	user := User{}
 	jsonErr := json.Unmarshal(body, &user)
 	if jsonErr != nil {
@@ -112,19 +131,55 @@ func dataUserById(ctx context.Context, rd *schema.ResourceData, meta interface{}
 			return diag.FromErr(err)
 		}
 	}
+	rd.Set("id", user.ID)
 	
-	rd.SetId(user.ID)
+	rd.SetId(userId)
 
-	// return ds
 	return nil
 }
 
-func dataSourceService() *schema.Resource {
+func dataUsers(ctx context.Context, rd *schema.ResourceData, meta interface{}) diag.Diagnostics {
+	client := meta.(*Client)
+	
+	// Get response of the request
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s", client.HostURL), nil)
+	body, err := client.doRequest(req)
+	catchErr(err)
+
+	users := []User{}
+	jsonErr := json.Unmarshal(body, &users)
+	if jsonErr != nil {
+		fmt.Println(jsonErr)
+	}
+
+	numberOfUsers := fmt.Sprint(len(users))
+
+	// for i := range users {
+	// 	receivedUsers := map[string]string{
+	// 		"firstname": 	users[i].FirstName,
+	// 		"lastname": 	users[i].LastName,
+	// 	};
+	// 	for key, val := range receivedUsers {
+	// 		if err := rd.Set(key, val); err != nil {
+	// 			return diag.FromErr(err)
+	// 		}
+	// 	}
+	// }
+
+	if usrerr := rd.Set("numberofusers", numberOfUsers); usrerr != nil {
+		return diag.FromErr(usrerr)
+	}
+	
+	rd.SetId(fmt.Sprint(numberOfUsers))
+	return nil
+}
+
+func dataSourceUserbyID() *schema.Resource {
 	return &schema.Resource{
 		ReadContext: dataUserById,
 		Schema: map[string]*schema.Schema{
 			"id": {
-				Type:		schema.TypeString,
+				Type:		schema.TypeInt,
 				Required:	true,
 			},
 			"firstname": {
@@ -135,14 +190,97 @@ func dataSourceService() *schema.Resource {
 				Type:		schema.TypeString,
 				Computed:	true,
 			},
+		},
+	}
+}
+
+func dataSourceUsers() *schema.Resource {
+	return &schema.Resource{
+		ReadContext: dataUsers,
+		Schema: map[string]*schema.Schema{
+			"numberofusers": {
+				Type:		schema.TypeInt,
+				Computed:	true,
+			},
 			// "users": {
-			// 	Type: schema.TypeMap,
+			// 	Type: schema.TypeList,
 			// 	Computed: true,
 			// 	Elem: &schema.Schema{
-			// 		Type: schema.TypeString,
-			// 		Sensitive: true,
+			// 		Type: schema.TypeMap,
 			// 	},
 			// },
 		},
 	}
+}
+
+func resourceService() *schema.Resource {
+	return &schema.Resource{
+		CreateContext: resourceUserService,
+		UpdateContext: updateResourceUserService,
+		ReadContext: dataUserById,
+		DeleteContext: dataUserById,
+		Schema: map[string]*schema.Schema{
+			"firstname": {
+				Type:		schema.TypeString,
+				Required: 	true,
+			},
+			"lastname": {
+				Type:		schema.TypeString,
+				Required: 	true,
+			},
+		},
+	}
+}
+
+func resourceUserService(ctx context.Context, rd *schema.ResourceData, meta interface{}) diag.Diagnostics {
+	firstname := rd.Get("firstname").(string)
+	lastname := rd.Get("lastname").(string)
+	client := meta.(*Client)
+
+	userData, _ := json.Marshal(map[string]string{
+		"firstname":	firstname,
+		"lastname":		lastname,
+	 })
+	responseBody := bytes.NewBuffer(userData)
+	fmt.Println(responseBody)
+
+	req, err := http.NewRequest("POST", fmt.Sprintf("%s", client.HostURL), responseBody)
+	body, err := client.doRequest(req)
+	catchErr(err)
+	defer req.Body.Close()
+	users := []User{}
+	jsonErr := json.Unmarshal(body, &users)
+	if jsonErr != nil {
+		fmt.Println(jsonErr)
+	}
+
+	rd.SetId(fmt.Sprint(len(users)))
+
+	return nil
+}
+
+func updateResourceUserService(ctx context.Context, rd *schema.ResourceData, meta interface{}) diag.Diagnostics {
+	firstname := rd.Get("firstname").(string)
+	lastname := rd.Get("lastname").(string)
+	client := meta.(*Client)
+
+	userData, _ := json.Marshal(map[string]string{
+		"firstname":	firstname,
+		"lastname":		lastname,
+	 })
+	responseBody := bytes.NewBuffer(userData)
+
+	req, err := http.NewRequest("PATCH", fmt.Sprintf("%s", client.HostURL), responseBody)
+	body, err := client.doRequest(req)
+	catchErr(err)
+	defer req.Body.Close()
+	users := []User{}
+	jsonErr := json.Unmarshal(body, &users)
+	if jsonErr != nil {
+		fmt.Println(jsonErr)
+	}
+
+	rd.SetId(string(len(users)))
+
+	return nil
 }

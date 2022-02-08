@@ -1,6 +1,7 @@
-#!/usr/bin/bash
+#!/bin/bash
 
 rm -rf examples/.terraform*
+rm -rf examples/terraform.*
 
 # Define standard parameters
 HOSTNAME=example.com
