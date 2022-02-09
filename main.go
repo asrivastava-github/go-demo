@@ -10,7 +10,6 @@ import (
 )
 
 func main() {
-	// fmt.Println("I am build a terraform provider using GO!!")
 	plugin.Serve(&plugin.ServeOpts{
 		ProviderFunc: func() *schema.Provider {
 			return provider.Provider()

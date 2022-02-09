@@ -1,4 +1,5 @@
 # go-demo
+    Once you clone the repo you will need to run "go get" to download all the required dependencies other than configuring goland and extensions.
 
 ## Steps
 
