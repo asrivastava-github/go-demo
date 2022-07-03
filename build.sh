@@ -10,8 +10,8 @@ NAME=demo
 BINARY=terraform-provider-${NAME}
 # Major.minor.patch
 VERSION=0.1.0
-# OS_ARCH=darwin_amd64 ==> For Mac
-OS_ARCH=linux_amd64
+OS_ARCH=darwin_amd64
+# OS_ARCH=linux_amd64
 PLUGIN_PATH=".terraform.d/plugins"
 OS=`uname`
 if [[ "$OS" == *"_NT-"* ]]; then
