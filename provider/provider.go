@@ -28,13 +28,16 @@ func Provider() *schema.Provider {
 				Description: "This is port to connect to",
 			},
 		},
-		// Data source name has to starts with the provider
+		// Resource name should start with the name of provider.
+		// For this demo We are focusing on performing CRUD on User resource
+		ResourcesMap : map[string]*schema.Resource{
+			"demo_user_service": resourceService(),
+		},
+		// Data source name has to starts with the provider.
+		// You can fetch the data from your API
 		DataSourcesMap: map[string]*schema.Resource {
 			"demo_user_by_id": dataSourceUserbyID(),
 			"demo_users": dataSourceUsers(),
-		},
-		ResourcesMap : map[string]*schema.Resource{
-			"demo_user_service": resourceService(),
 		},
 		// This triggers to initialise the configuration. Connection etc.
 		ConfigureContextFunc: setupServiceContext,
@@ -47,7 +50,7 @@ type User struct {
 	LastName  string
 }
 
-const HostURL string = "http://localhost:5000"
+// const HostURL string = "http://localhost:5000"
 
 func catchErr(err error) {
 	fmt.Println(err)
